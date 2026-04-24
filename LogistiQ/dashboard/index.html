@@ -1,301 +1,396 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>LogistiQ Control Panel</title>
-		<style>
-			:root {
-				color-scheme: dark;
-				--bg: #0b1020;
-				--panel: rgba(17, 24, 39, 0.88);
-				--panel-2: rgba(30, 41, 59, 0.75);
-				--border: rgba(148, 163, 184, 0.2);
-				--text: #e5eefb;
-				--muted: #9fb1cc;
-				--accent: #6ee7ff;
-				--good: #34d399;
-				--warn: #fbbf24;
-				--bad: #f87171;
-			}
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LogistiQ — Live Operations</title>
+<style>
+:root{color-scheme:dark;--bg:#080f1e;--panel:rgba(13,20,38,0.92);--panel2:rgba(22,32,54,0.8);--border:rgba(100,140,200,0.18);--text:#ddeeff;--muted:#7a9bbf;--accent:#5ee7d0;--good:#34d399;--warn:#fbbf24;--bad:#f87171;--purple:#a78bfa;--blue:#60a5fa;--teal:#34d399;--amber:#fbbf24;--coral:#fb923c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,Segoe UI,Arial,sans-serif;background:radial-gradient(circle at 20% 20%,rgba(94,231,208,.08),transparent 40%),radial-gradient(circle at 80% 80%,rgba(96,165,250,.07),transparent 40%),var(--bg);color:var(--text);min-height:100vh}
+/* TOP BAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:rgba(8,15,30,.95)}
+.logo{font-size:20px;font-weight:700;letter-spacing:-.5px}.logo span{color:var(--accent)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.conn-badge{font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+.conn-badge.live{color:var(--good);border-color:var(--good)}
+.crisis-btn{font-size:13px;font-weight:600;padding:8px 18px;border-radius:8px;border:none;background:var(--bad);color:#fff;cursor:pointer;transition:opacity .2s}
+.crisis-btn:hover{opacity:.85}
+.crisis-btn.fired{background:#7f1d1d;cursor:default}
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--border)}
+.metric{padding:14px 20px;border-right:1px solid var(--border)}
+.metric:last-child{border-right:none}
+.metric-val{font-size:26px;font-weight:600;transition:color .4s}
+.metric-val.danger{color:var(--bad)}
+.metric-val.warn{color:var(--warn)}
+.metric-label{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
+/* AGENTS ROW */
+.agents-row{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-bottom:1px solid var(--border)}
+.agent-cell{padding:10px 12px;border-right:1px solid var(--border);text-align:center}
+.agent-cell:last-child{border-right:none}
+.agent-icon{width:32px;height:32px;border-radius:8px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:1px solid var(--border);color:var(--muted);background:var(--panel2);transition:all .3s}
+.agent-icon.active-purple{background:rgba(167,139,250,.15);color:#a78bfa;border-color:#a78bfa}
+.agent-icon.active-teal  {background:rgba(52,211,153,.15); color:#34d399;border-color:#34d399}
+.agent-icon.active-amber {background:rgba(251,191,36,.15); color:#fbbf24;border-color:#fbbf24}
+.agent-icon.active-coral {background:rgba(251,146,60,.15); color:#fb923c;border-color:#fb923c}
+.agent-icon.active-blue  {background:rgba(96,165,250,.15); color:#60a5fa;border-color:#60a5fa}
+.agent-icon.active-gray  {background:rgba(148,163,184,.15);color:#94a3b8;border-color:#94a3b8}
+.agent-name{font-size:11px;font-weight:600;color:var(--text)}
+.agent-status{font-size:10px;color:var(--muted);margin-top:2px;min-height:14px}
+.agent-status.live{color:var(--good)}
+.agent-status.thinking{color:var(--warn)}
+/* MAIN GRID */
+.main{display:grid;grid-template-columns:1fr 300px;height:calc(100vh - 200px);overflow:hidden}
+.left{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
+.feed-header{padding:10px 16px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);flex-shrink:0}
+.feed{flex:1;overflow-y:auto;padding:8px 0}
+.feed-item{display:flex;gap:8px;padding:7px 16px;border-bottom:1px solid rgba(100,140,200,.07);align-items:flex-start}
+.feed-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.feed-text{font-size:12px;color:var(--text);line-height:1.5;flex:1}
+.feed-time{font-size:10px;color:var(--muted);flex-shrink:0;margin-top:2px}
+/* RIGHT PANEL */
+.right{display:flex;flex-direction:column;overflow:hidden}
+.panel-hdr{padding:10px 14px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.conflict-area{flex:0 0 auto;border-bottom:1px solid var(--border);padding:10px 14px;min-height:80px;max-height:240px;overflow-y:auto}
+.conflict-card{border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:8px;background:var(--panel2);font-size:12px}
+.conflict-card:last-child{margin-bottom:0}
+.conflict-title{font-weight:600;color:var(--text);margin-bottom:3px}
+.conflict-detail{color:var(--muted);line-height:1.5}
+.cb{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:5px}
+.cb-warn{background:rgba(251,191,36,.15);color:#fbbf24}
+.cb-ok  {background:rgba(52,211,153,.15); color:#34d399}
+.cb-bad {background:rgba(248,113,113,.15);color:#f87171}
+.decision-area{flex:1;padding:12px 14px;overflow-y:auto}
+.decision-box{background:var(--panel2);border-radius:8px;padding:11px 13px;font-size:12px;color:var(--muted);line-height:1.65;min-height:60px;transition:color .3s}
+.decision-box.live{color:var(--text)}
+.conf-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.conf-label{font-size:11px;color:var(--muted);flex-shrink:0}
+.conf-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.conf-fill{height:100%;border-radius:2px;background:var(--good);width:0;transition:width 1s ease}
+.conf-val{font-size:11px;font-weight:600;color:var(--text);min-width:30px;text-align:right}
+.override-btn{margin-top:10px;width:100%;font-size:12px;font-weight:600;padding:8px;border-radius:7px;border:1px solid var(--warn);background:rgba(251,191,36,.1);color:var(--warn);cursor:pointer;display:none}
+.override-btn.show{display:block}
+.empty-note{font-size:12px;color:var(--muted);text-align:center;padding:16px 0}
+</style>
+</head>
+<body>
 
-			* { box-sizing: border-box; }
-			body {
-				margin: 0;
-				font-family: Inter, Segoe UI, Arial, sans-serif;
-				background:
-					radial-gradient(circle at top left, rgba(110, 231, 255, 0.16), transparent 32%),
-					radial-gradient(circle at bottom right, rgba(52, 211, 153, 0.12), transparent 28%),
-					var(--bg);
-				color: var(--text);
-				min-height: 100vh;
-			}
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="logo">Logisti<span>Q</span></div>
+    <span style="font-size:12px;color:var(--muted)" id="clock">--:--:--</span>
+  </div>
+  <div class="topbar-right">
+    <span class="conn-badge" id="conn-badge">Connecting...</span>
+    <button class="crisis-btn" id="crisis-btn" onclick="fireCrisis()">⚡ Simulate Crisis</button>
+  </div>
+</div>
 
-			header {
-				padding: 28px 32px 16px;
-				display: flex;
-				justify-content: space-between;
-				align-items: end;
-				gap: 20px;
-			}
+<div class="metrics">
+  <div class="metric"><div class="metric-val" id="m-trucks">12</div><div class="metric-label">Active trucks</div></div>
+  <div class="metric"><div class="metric-val" id="m-alerts">0</div><div class="metric-label">Live alerts</div></div>
+  <div class="metric"><div class="metric-val" id="m-rfid">100%</div><div class="metric-label">RFID match</div></div>
+  <div class="metric"><div class="metric-val" id="m-temp">6.2°C</div><div class="metric-label">Cold store temp</div></div>
+</div>
 
-			h1 {
-				margin: 0;
-				font-size: 32px;
-				letter-spacing: 0.3px;
-			}
+<div class="agents-row">
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-scout">SC</div>
+    <div class="agent-name">Scout</div>
+    <div class="agent-status" id="as-scout">Watching</div>
+  </div>
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-router">RT</div>
+    <div class="agent-name">Router</div>
+    <div class="agent-status" id="as-router">Idle</div>
+  </div>
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-audit">AU</div>
+    <div class="agent-name">Audit</div>
+    <div class="agent-status" id="as-audit">Idle</div>
+  </div>
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-sentinel">SE</div>
+    <div class="agent-name">Sentinel</div>
+    <div class="agent-status" id="as-sentinel">Idle</div>
+  </div>
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-arbiter">AR</div>
+    <div class="agent-name">Arbiter</div>
+    <div class="agent-status" id="as-arbiter">Idle</div>
+  </div>
+  <div class="agent-cell">
+    <div class="agent-icon" id="ai-commander">CM</div>
+    <div class="agent-name">Commander</div>
+    <div class="agent-status" id="as-commander">Idle</div>
+  </div>
+</div>
 
-			.subtitle { color: var(--muted); margin-top: 8px; }
+<div class="main">
+  <div class="left">
+    <div class="feed-header">Agent reasoning feed <span id="feed-count" style="font-weight:400;color:var(--muted)"></span></div>
+    <div class="feed" id="feed"></div>
+  </div>
+  <div class="right">
+    <div class="panel-hdr">Arbiter conflicts <span id="conflict-count" style="font-weight:400">0 active</span></div>
+    <div class="conflict-area" id="conflict-area">
+      <div class="empty-note">No conflicts detected</div>
+    </div>
+    <div class="panel-hdr">Commander decision</div>
+    <div class="decision-area">
+      <div class="decision-box" id="decision-box">Waiting for agent outputs...</div>
+      <div class="conf-row">
+        <span class="conf-label">Confidence</span>
+        <div class="conf-bar"><div class="conf-fill" id="conf-fill"></div></div>
+        <span class="conf-val" id="conf-val">—</span>
+      </div>
+      <button class="override-btn" id="override-btn">⚠️ Override — Review manually</button>
+    </div>
+  </div>
+</div>
 
-			.status {
-				padding: 10px 14px;
-				border-radius: 999px;
-				border: 1px solid var(--border);
-				background: rgba(15, 23, 42, 0.6);
-				color: var(--accent);
-				font-size: 13px;
-			}
+<script>
+// ── Clock ──────────────────────────────────────────────────────────────────
+function tickClock(){var n=new Date();document.getElementById('clock').textContent=n.toLocaleTimeString();}
+setInterval(tickClock,1000);tickClock();
 
-			main {
-				padding: 0 32px 32px;
-				display: grid;
-				gap: 18px;
-				grid-template-columns: 1.2fr 0.8fr;
-			}
+// ── Agent config ───────────────────────────────────────────────────────────
+var AGENT_MAP={
+  'SCOUT':    {icon:'ai-scout',    stat:'as-scout',    cls:'active-purple', label:'Scout'},
+  'ROUTER':   {icon:'ai-router',   stat:'as-router',   cls:'active-teal',   label:'Router'},
+  'AUDIT':    {icon:'ai-audit',    stat:'as-audit',    cls:'active-amber',  label:'Audit'},
+  'SENTINEL': {icon:'ai-sentinel', stat:'as-sentinel', cls:'active-coral',  label:'Sentinel'},
+  'ARBITER':  {icon:'ai-arbiter',  stat:'as-arbiter',  cls:'active-blue',   label:'Arbiter'},
+  'COMMANDER':{icon:'ai-commander',stat:'as-commander',cls:'active-gray',   label:'Commander'},
+};
+var DOT_MAP={
+  'SCOUT':'#a78bfa','ROUTER':'#34d399','AUDIT':'#fbbf24',
+  'SENTINEL':'#fb923c','ARBITER':'#60a5fa','COMMANDER':'#94a3b8','SIMULATOR':'#475569'
+};
 
-			.card {
-				background: var(--panel);
-				border: 1px solid var(--border);
-				border-radius: 18px;
-				box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-				overflow: hidden;
-			}
+function setAgent(key,status,cls){
+  var a=AGENT_MAP[key]; if(!a)return;
+  var icon=document.getElementById(a.icon);
+  var stat=document.getElementById(a.stat);
+  if(cls){icon.className='agent-icon '+cls;}
+  if(status){stat.textContent=status;stat.className='agent-status '+(cls?'live':'');}
+}
+function idleAgent(key){
+  var a=AGENT_MAP[key]; if(!a)return;
+  document.getElementById(a.icon).className='agent-icon';
+  document.getElementById(a.stat).textContent='Idle';
+  document.getElementById(a.stat).className='agent-status';
+}
 
-			.card header {
-				padding: 16px 18px;
-				border-bottom: 1px solid var(--border);
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-			}
+// ── Feed ───────────────────────────────────────────────────────────────────
+var feedCount=0;
+function addFeed(agent,text){
+  feedCount++;
+  var feed=document.getElementById('feed');
+  var dot=DOT_MAP[agent]||'#475569';
+  var item=document.createElement('div');item.className='feed-item';
+  var t=new Date().toLocaleTimeString();
+  item.innerHTML='<div class="feed-dot" style="background:'+dot+'"></div>'
+    +'<div class="feed-text"><strong style="color:'+dot+'">'+agent+'</strong> — '+escHtml(text)+'</div>'
+    +'<div class="feed-time">'+t+'</div>';
+  feed.insertBefore(item,feed.firstChild);
+  document.getElementById('feed-count').textContent='('+feedCount+' events)';
+}
 
-			.card h2 {
-				margin: 0;
-				font-size: 16px;
-				letter-spacing: 0.4px;
-			}
+// ── Channel → agent routing ────────────────────────────────────────────────
+var CHANNEL_AGENT={
+  'logistiq:alerts':           'SCOUT',
+  'logistiq:router_output':    'ROUTER',
+  'logistiq:audit_output':     'AUDIT',
+  'logistiq:sentinel_output':  'SENTINEL',
+  'logistiq:arbiter_output':   'ARBITER',
+  'logistiq:commander_output': 'COMMANDER',
+  'logistiq:raw_data':         'SIMULATOR',
+  'logistiq:dashboard':        null,
+};
 
-			.card .body { padding: 16px 18px 18px; }
+function processEvent(event){
+  var ch=event.channel||'';
+  var data=event.data;
 
-			.timeline {
-				display: grid;
-				gap: 12px;
-			}
+  // dashboard channel carries structured messages from agents
+  if(ch==='logistiq:dashboard'){
+    handleDashboardMsg(data);return;
+  }
 
-			.event {
-				background: var(--panel-2);
-				border: 1px solid var(--border);
-				border-radius: 14px;
-				padding: 14px;
-			}
+  var agent=CHANNEL_AGENT[ch];
+  if(!agent)return;
 
-			.event-top {
-				display: flex;
-				justify-content: space-between;
-				gap: 12px;
-				align-items: center;
-				margin-bottom: 8px;
-			}
+  if(ch==='logistiq:raw_data'){
+    addFeed('SIMULATOR','Emitting sensor bundle → '+((data&&data.type)||'?'));
+    return;
+  }
 
-			.channel {
-				font-size: 12px;
-				color: var(--accent);
-				text-transform: uppercase;
-				letter-spacing: 0.1em;
-			}
+  if(ch==='logistiq:alerts'){
+    setAgent('SCOUT','Active',AGENT_MAP['SCOUT'].cls);
+    var anomalies=(data&&data.anomalies)||[];
+    addFeed('SCOUT','Classified '+(anomalies.length)+' anomal'+(anomalies.length===1?'y':'ies')+': '
+      +anomalies.map(function(a){return a.anomaly_type;}).join(', '));
+    setMetricsFromAlert(anomalies);
+    // activate downstream agents
+    anomalies.forEach(function(a){
+      if(a.anomaly_type==='GPS_DEVIATION'){setAgent('ROUTER','Analysing...',AGENT_MAP['ROUTER'].cls);}
+      if(a.anomaly_type==='RFID_MISMATCH'){setAgent('AUDIT','Reconciling...',AGENT_MAP['AUDIT'].cls);}
+      if(a.anomaly_type==='IOT_ANOMALY'){setAgent('SENTINEL','Diagnosing...',AGENT_MAP['SENTINEL'].cls);}
+    });
+    return;
+  }
 
-			.time { color: var(--muted); font-size: 12px; }
-			pre {
-				margin: 0;
-				white-space: pre-wrap;
-				word-break: break-word;
-				font-size: 13px;
-				line-height: 1.45;
-				color: #dbeafe;
-			}
+  if(ch==='logistiq:router_output'){
+    setAgent('ROUTER','Output ready',AGENT_MAP['ROUTER'].cls);
+    addFeed('ROUTER','Proposed: '+(data&&data.proposed_action||'?')
+      +' | ETA delta: +'+(data&&data.eta_delta_minutes||'?')+'min'
+      +' | Driver hours violated: '+(data&&data.driver_hours_violated||false));
+    return;
+  }
 
-			.metrics {
-				display: grid;
-				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 12px;
-			}
+  if(ch==='logistiq:audit_output'){
+    setAgent('AUDIT','Output ready',AGENT_MAP['AUDIT'].cls);
+    addFeed('AUDIT','Gap: '+(data&&data.gap_quantity||'?')+' units'
+      +' | Worsens shortage: '+(data&&data.will_reroute_worsen_shortage||false)
+      +' | Priority: '+(data&&data.recount_priority||'?'));
+    return;
+  }
 
-			.metric {
-				background: var(--panel-2);
-				border: 1px solid var(--border);
-				border-radius: 14px;
-				padding: 14px;
-			}
+  if(ch==='logistiq:sentinel_output'){
+    setAgent('SENTINEL','Output ready',AGENT_MAP['SENTINEL'].cls);
+    addFeed('SENTINEL','Root cause: '+(data&&data.probable_cause||'?')
+      +' | Confidence: '+(data&&data.confidence||'?')
+      +' | Urgency: '+(data&&data.urgency||'?'));
+    return;
+  }
 
-			.metric .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
-			.metric .value { font-size: 26px; margin-top: 8px; }
+  if(ch==='logistiq:arbiter_output'){
+    setAgent('ARBITER','Resolved',AGENT_MAP['ARBITER'].cls);
+    var conflicts=(data&&data.conflicts_detected)||[];
+    var blocked=(data&&data.blocked_actions)||[];
+    addFeed('ARBITER',conflicts.length+' conflict(s) detected, '+blocked.length+' action(s) blocked');
+    renderConflicts(data);
+    return;
+  }
 
-			.legend {
-				display: flex;
-				gap: 10px;
-				flex-wrap: wrap;
-				margin-top: 12px;
-			}
+  if(ch==='logistiq:commander_output'){
+    setAgent('COMMANDER','Decision ready',AGENT_MAP['COMMANDER'].cls);
+    renderDecision(data);
+    addFeed('COMMANDER',(data&&data.executive_summary)||'Decision compiled.');
+    return;
+  }
+}
 
-			.pill {
-				border: 1px solid var(--border);
-				border-radius: 999px;
-				padding: 6px 10px;
-				font-size: 12px;
-				color: var(--muted);
-			}
+function handleDashboardMsg(data){
+  if(!data||typeof data!=='object')return;
+  var agent=data.agent||'';
+  var msg=data.message||'';
+  var type=data.type||'';
 
-			.good { color: var(--good); }
-			.warn { color: var(--warn); }
-			.bad { color: var(--bad); }
+  if(agent&&msg){
+    var a=AGENT_MAP[agent];
+    if(a){setAgent(agent,'Active',a.cls);}
+    addFeed(agent,msg);
+  }
 
-			@media (max-width: 980px) {
-				main { grid-template-columns: 1fr; }
-				header { align-items: start; flex-direction: column; }
-			}
-		</style>
-	</head>
-	<body>
-		<header>
-			<div>
-				<h1>LogistiQ Control Panel</h1>
-				<div class="subtitle">Live Redis event stream for raw telemetry, anomaly alerts, and reroute decisions.</div>
-			</div>
-			<div class="status" id="connectionStatus">Connecting…</div>
-		</header>
+  if(type==='FINAL_DECISION'&&data.decision){
+    renderDecision(data.decision);
+  }
+}
 
-		<main>
-			<section class="card">
-				<header>
-					<h2>Event Stream</h2>
-					<span class="pill" id="eventCount">0 events</span>
-				</header>
-				<div class="body">
-					<div class="timeline" id="timeline"></div>
-				</div>
-			</section>
+// ── Metrics ────────────────────────────────────────────────────────────────
+function setMetricsFromAlert(anomalies){
+  var alertCount=anomalies.length;
+  var mAlerts=document.getElementById('m-alerts');
+  mAlerts.textContent=alertCount;
+  mAlerts.className='metric-val'+(alertCount>0?' danger':'');
 
-			<section class="card">
-				<header>
-					<h2>Pipeline Health</h2>
-					<span class="pill">Scout → Router</span>
-				</header>
-				<div class="body">
-					<div class="metrics">
-						<div class="metric">
-							<div class="label">Latest Channel</div>
-							<div class="value" id="latestChannel">—</div>
-						</div>
-						<div class="metric">
-							<div class="label">Latest Event ID</div>
-							<div class="value" id="latestEventId">—</div>
-						</div>
-						<div class="metric">
-							<div class="label">Scout Alerts</div>
-							<div class="value good" id="scoutAlerts">0</div>
-						</div>
-						<div class="metric">
-							<div class="label">Router Outputs</div>
-							<div class="value warn" id="routerOutputs">0</div>
-						</div>
-					</div>
+  anomalies.forEach(function(a){
+    if(a.anomaly_type==='RFID_MISMATCH'){
+      document.getElementById('m-rfid').textContent='93%';
+      document.getElementById('m-rfid').className='metric-val warn';
+    }
+    if(a.anomaly_type==='IOT_ANOMALY'){
+      document.getElementById('m-temp').textContent='12.4°C';
+      document.getElementById('m-temp').className='metric-val danger';
+    }
+  });
+}
 
-					<div class="legend">
-						<span class="pill">logistiq:raw_data</span>
-						<span class="pill">logistiq:alerts</span>
-						<span class="pill">logistiq:router_output</span>
-					</div>
-				</div>
-			</section>
-		</main>
+// ── Conflicts panel ────────────────────────────────────────────────────────
+function renderConflicts(arbiter){
+  var area=document.getElementById('conflict-area');
+  var conflicts=arbiter.conflicts_detected||[];
+  var blocked=arbiter.blocked_actions||[];
+  document.getElementById('conflict-count').textContent=conflicts.length+' active';
 
-		<script>
-			const timeline = document.getElementById("timeline");
-			const connectionStatus = document.getElementById("connectionStatus");
-			const eventCount = document.getElementById("eventCount");
-			const latestChannel = document.getElementById("latestChannel");
-			const latestEventId = document.getElementById("latestEventId");
-			const scoutAlerts = document.getElementById("scoutAlerts");
-			const routerOutputs = document.getElementById("routerOutputs");
+  if(!conflicts.length&&!blocked.length){
+    area.innerHTML='<div class="empty-note">No conflicts detected</div>';return;
+  }
+  var html='';
+  conflicts.forEach(function(c){
+    html+='<div class="conflict-card">'
+      +'<div class="conflict-title">'+escHtml(c.conflict_type||'Conflict')+'</div>'
+      +'<div class="conflict-detail">'+escHtml(c.description||'')+'</div>'
+      +'<span class="cb cb-warn">'+escHtml(c.agents_involved&&c.agents_involved.join(' vs ')||'')+'</span>'
+      +'</div>';
+  });
+  blocked.forEach(function(b){
+    html+='<div class="conflict-card">'
+      +'<div class="conflict-title">Blocked: '+escHtml(b.action||'?')+'</div>'
+      +'<div class="conflict-detail">'+escHtml(b.reason||'')+'</div>'
+      +'<span class="cb cb-bad">'+escHtml(b.rule_violated||'compliance rule')+'</span>'
+      +'</div>';
+  });
+  area.innerHTML=html;
+}
 
-			let totalEvents = 0;
-			let scoutCount = 0;
-			let routerCount = 0;
+// ── Decision panel ─────────────────────────────────────────────────────────
+function renderDecision(commander){
+  if(!commander)return;
+  var box=document.getElementById('decision-box');
+  box.className='decision-box live';
+  box.textContent=commander.executive_summary||'Decision compiled.';
+  var conf=commander.confidence_overall||0;
+  document.getElementById('conf-fill').style.width=Math.round(conf*100)+'%';
+  document.getElementById('conf-val').textContent=Math.round(conf*100)+'%';
+  var btn=document.getElementById('override-btn');
+  if(commander.requires_human_attention){btn.className='override-btn show';}
+}
 
-			function renderEvent(event) {
-				totalEvents += 1;
-				eventCount.textContent = `${totalEvents} events`;
-				latestChannel.textContent = event.channel || "unknown";
+// ── Crisis trigger ─────────────────────────────────────────────────────────
+function fireCrisis(){
+  var btn=document.getElementById('crisis-btn');
+  btn.textContent='⚡ Crisis fired!';btn.className='crisis-btn fired';
+  addFeed('SIMULATOR','Crisis scenario triggered — all 3 anomaly types firing...');
+  // Tell the backend to run the simulator --crisis flag
+  fetch('/trigger-crisis',{method:'POST'}).catch(function(){});
+}
 
-				const payload = typeof event.data === "string" ? safeParse(event.data) : event.data;
-				latestEventId.textContent = payload && payload.event_id ? payload.event_id : "—";
+// ── SSE connection ─────────────────────────────────────────────────────────
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
-				if (event.channel === "logistiq:alerts") scoutCount += 1;
-				if (event.channel === "logistiq:router_output") routerCount += 1;
-				scoutAlerts.textContent = scoutCount;
-				routerOutputs.textContent = routerCount;
-
-				const node = document.createElement("article");
-				node.className = "event";
-				node.innerHTML = `
-					<div class="event-top">
-						<div class="channel">${escapeHtml(event.channel || "unknown")}</div>
-						<div class="time">${new Date().toLocaleTimeString()}</div>
-					</div>
-					<pre>${escapeHtml(JSON.stringify(payload ?? event.data, null, 2))}</pre>
-				`;
-				timeline.prepend(node);
-			}
-
-			function safeParse(value) {
-				try { return JSON.parse(value); } catch { return value; }
-			}
-
-			function escapeHtml(value) {
-				return String(value)
-					.replaceAll("&", "&amp;")
-					.replaceAll("<", "&lt;")
-					.replaceAll(">", "&gt;")
-					.replaceAll('"', "&quot;")
-					.replaceAll("'", "&#039;");
-			}
-
-			async function loadSnapshot() {
-				const response = await fetch("/snapshot");
-				const data = await response.json();
-				(data.events || []).forEach(renderEvent);
-			}
-
-			async function connect() {
-				try {
-					await loadSnapshot();
-					const source = new EventSource("/events");
-					source.onopen = () => {
-						connectionStatus.textContent = "Connected";
-					};
-					source.onmessage = (message) => {
-						renderEvent(JSON.parse(message.data));
-					};
-					source.onerror = () => {
-						connectionStatus.textContent = "Reconnecting…";
-					};
-				} catch (error) {
-					connectionStatus.textContent = "Offline";
-					console.error(error);
-				}
-			}
-
-			connect();
-		</script>
-	</body>
+async function connect(){
+  try{
+    var snap=await fetch('/snapshot');
+    var d=await snap.json();
+    (d.events||[]).forEach(processEvent);
+    var badge=document.getElementById('conn-badge');
+    var src=new EventSource('/events');
+    src.onopen=function(){badge.textContent='Live';badge.className='conn-badge live';};
+    src.onmessage=function(e){try{processEvent(JSON.parse(e.data));}catch(err){}};
+    src.onerror=function(){badge.textContent='Reconnecting...';badge.className='conn-badge';
+      setTimeout(connect,2000);src.close();};
+  }catch(e){
+    document.getElementById('conn-badge').textContent='Offline';
+    setTimeout(connect,3000);
+  }
+}
+connect();
+</script>
+</body>
 </html>
