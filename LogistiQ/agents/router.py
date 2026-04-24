@@ -1,32 +1,34 @@
 import asyncio
 import json
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
 
 try:
 	from .base_agent import call_llm, get_redis_client, load_mock_response
 except ImportError:
 	from base_agent import call_llm, get_redis_client, load_mock_response
 
+RAW_DATA_CHANNEL = "logistiq:raw_data"
 ALERTS_CHANNEL = "logistiq:alerts"
-ROUTER_OUTPUT_CHANNEL = "logistiq:router_output"
 
-ROUTER_SYSTEM_PROMPT = """You are the Router Agent for LogistiQ. You handle vehicle deviation alerts.
+SCOUT_SYSTEM_PROMPT = """You are the Scout Agent for LogistiQ, an autonomous supply chain
+intelligence system. You receive raw sensor data and must classify
+anomalies precisely.
 
-Given a GPS_DEVIATION alert, respond ONLY with JSON containing:
-- event_id: string
-- proposed_action: string (REROUTE_NORTH / REROUTE_SOUTH / HOLD / RETURN_TO_BASE)
-- route_description: plain English reroute instruction
-- eta_delta_minutes: integer (positive = delay, negative = faster)
-- driver_hours_remaining: integer minutes (assume 47 minutes remaining)
-- driver_hours_after_reroute: integer minutes
-- driver_hours_violated: boolean
-- priority_score: integer 1-10
-- downstream_inventory_impact: string description
+Analyse the input JSON and respond ONLY with a JSON object containing:
+- event_id: string (copy from input)
+- anomalies: array of objects, each with:
+- anomaly_type: one of GPS_DEVIATION, RFID_MISMATCH, IOT_ANOMALY
+- severity: integer 1-5 (5 = critical)
+- confidence: float 0-1
+- affected_asset: string identifier
+- key_facts: array of strings, plain English observations
+- recommended_agents: array from [ROUTER, AUDIT, SENTINEL]
+- overall_assessment: one sentence plain English summary
 
 Return ONLY valid JSON. No explanation, no markdown."""
 
 
-def _parse_alert(data: str) -> Dict[str, Any] | None:
+def _parse_message(data: str) -> Dict[str, Any] | None:
 	try:
 		parsed = json.loads(data)
 		if isinstance(parsed, dict):
@@ -36,26 +38,10 @@ def _parse_alert(data: str) -> Dict[str, Any] | None:
 	return None
 
 
-def _iter_qualifying_anomalies(alert: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
-	anomalies = alert.get("anomalies", [])
-	if not isinstance(anomalies, list):
-		return []
-
-	qualifying: list[Dict[str, Any]] = []
-	for anomaly in anomalies:
-		if not isinstance(anomaly, dict):
-			continue
-		anomaly_type = anomaly.get("anomaly_type")
-		severity = anomaly.get("severity", 0)
-		if anomaly_type == "GPS_DEVIATION" and isinstance(severity, int) and severity >= 3:
-			qualifying.append(anomaly)
-	return qualifying
-
-
 async def run() -> None:
 	redis_client = get_redis_client()
 	pubsub = redis_client.pubsub()
-	await pubsub.subscribe(ALERTS_CHANNEL)
+	await pubsub.subscribe(RAW_DATA_CHANNEL)
 
 	try:
 		while True:
@@ -68,27 +54,17 @@ async def run() -> None:
 			if not isinstance(raw_payload, str):
 				continue
 
-			alert = _parse_alert(raw_payload)
-			if alert is None:
+			incoming_data = _parse_message(raw_payload)
+			if incoming_data is None:
 				continue
 
-			event_id = alert.get("event_id", "unknown_event")
-			for anomaly in _iter_qualifying_anomalies(alert):
-				llm_input = {
-					"event_id": event_id,
-					"anomaly": anomaly,
-					"overall_assessment": alert.get("overall_assessment", ""),
-				}
-				try:
-					routed_plan = await call_llm(ROUTER_SYSTEM_PROMPT, llm_input)
-				except Exception:
-					routed_plan = load_mock_response("router")
-				await redis_client.publish(
-					ROUTER_OUTPUT_CHANNEL,
-					json.dumps(routed_plan, ensure_ascii=True),
-				)
+			try:
+				alert_data = await call_llm(SCOUT_SYSTEM_PROMPT, incoming_data)
+			except Exception:
+				alert_data = load_mock_response("scout")
+			await redis_client.publish(ALERTS_CHANNEL, json.dumps(alert_data, ensure_ascii=True))
 	finally:
-		await pubsub.unsubscribe(ALERTS_CHANNEL)
+		await pubsub.unsubscribe(RAW_DATA_CHANNEL)
 		await pubsub.close()
 
 
