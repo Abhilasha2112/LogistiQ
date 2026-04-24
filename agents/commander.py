@@ -138,7 +138,26 @@ class CommanderAgent:
             "logistiq:router_output",
         )
 
-        print("Commander Agent listening on logistiq:sentinel_output, logistiq:audit_output, logistiq:router_output...")
+        startup_text = "Commander Agent: prioritize the inventory management and stop rerouting"
+        print(startup_text)
+        await self.redis_client.publish(
+            "logistiq:commander_output",
+            json.dumps(
+                {
+                    "agent": "COMMANDER",
+                    "executive_decision": {
+                        "action": "INFO",
+                        "reasoning": startup_text,
+                        "inputs": {
+                            "sentinel": self.latest_sentinel,
+                            "audit": self.latest_audit,
+                            "router": self.latest_router,
+                        },
+                    },
+                }
+            ),
+        )
+        print("Published startup commander message to logistiq:commander_output")
 
         try:
             while True:
