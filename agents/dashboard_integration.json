@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "logistiq/dashboard_integration",
+  "title": "LogistiQ Intelligence Layer Dashboard Integration Schema",
+  "type": "object",
+  "required": [
+    "status_feed",
+    "sentinel",
+    "audit",
+    "arbiter",
+    "conflict_alert"
+  ],
+  "properties": {
+    "status_feed": {
+      "type": "array",
+      "description": "Real-time causal reasoning feed for timeline widgets and live operations console.",
+      "items": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "agent",
+          "message",
+          "severity"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "agent": {
+            "type": "string",
+            "enum": [
+              "Sentinel",
+              "AUDIT",
+              "ARBITER"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Causal reasoning string from an agent (for example a causal_chain step or resolution_reasoning)."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "shipment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sentinel": {
+      "type": "object",
+      "required": [
+        "agent",
+        "issue_detected",
+        "causal_chain",
+        "urgency",
+        "confidence_meter"
+      ],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "const": "Sentinel"
+        },
+        "issue_detected": {
+          "type": "boolean"
+        },
+        "causal_chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Ordered autonomous reasoning chain used by Sentinel to infer root operational cause."
+        },
+        "urgency": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ]
+        },
+        "confidence_meter": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Frontend confidence meter for Sentinel decision in 0-100 scale."
+        }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "type": "object",
+      "required": [
+        "agent",
+        "shipment_id",
+        "issue",
+        "missing_items",
+        "inventory_gap",
+        "priority",
+        "confidence_meter"
+      ],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "const": "AUDIT"
+        },
+        "shipment_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "issue": {
+          "type": "string",
+          "enum": [
+            "INVENTORY_SHRINKAGE"
+          ]
+        },
+        "missing_items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "item_id",
+              "missing_quantity"
+            ],
+            "properties": {
+              "item_id": {
+                "type": "string"
+              },
+              "missing_quantity": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "inventory_gap": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Frontend canonical inventory shortfall metric. Map from current backend shrinkage_value."
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "MEDIUM",
+            "HIGH"
+          ]
+        },
+        "confidence_meter": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Frontend confidence meter for Audit decision in 0-100 scale."
+        }
+      },
+      "additionalProperties": false
+    },
+    "arbiter": {
+      "type": "object",
+      "required": [
+        "agent",
+        "conflicts_detected",
+        "final_decision",
+        "actions",
+        "blocked_actions",
+        "resolution_reasoning",
+        "incident_summary",
+        "escalate_to_human",
+        "confidence_meter"
+      ],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "const": "ARBITER"
+        },
+        "conflicts_detected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "final_decision": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resolution_reasoning": {
+          "type": "string"
+        },
+        "incident_summary": {
+          "type": "object",
+          "required": [
+            "threat_level",
+            "action_taken",
+            "logic_applied",
+            "potential_loss_prevented"
+          ],
+          "properties": {
+            "threat_level": {
+              "type": "string",
+              "enum": [
+                "MEDIUM",
+                "HIGH",
+                "CRITICAL"
+              ]
+            },
+            "action_taken": {
+              "type": "string"
+            },
+            "logic_applied": {
+              "type": "string"
+            },
+            "potential_loss_prevented": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "escalate_to_human": {
+          "type": "boolean",
+          "description": "Set true when manual supervisory review is required."
+        },
+        "confidence_meter": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Frontend confidence meter for Arbiter decision in 0-100 scale."
+        }
+      },
+      "additionalProperties": false
+    },
+    "conflict_alert": {
+      "type": "object",
+      "required": [
+        "is_active",
+        "conflict_type",
+        "blocked_action",
+        "severity",
+        "message"
+      ],
+      "properties": {
+        "is_active": {
+          "type": "boolean",
+          "description": "True when Arbiter blocks reroute due to policy/operational conflict."
+        },
+        "conflict_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Expected value when active: ROUTE_VS_INVENTORY"
+        },
+        "blocked_action": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Expected value when active: REROUTE"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Dashboard-ready alert summary for operators."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "status_feed": [
+        {
+          "timestamp": "2026-04-24T12:15:30Z",
+          "agent": "Sentinel",
+          "message": "Conclusion: Compressor Malfunction.",
+          "severity": "CRITICAL",
+          "shipment_id": null
+        },
+        {
+          "timestamp": "2026-04-24T12:16:03Z",
+          "agent": "ARBITER",
+          "message": "Rerouting would worsen inventory shortage, so inventory reconciliation is prioritized.",
+          "severity": "HIGH",
+          "shipment_id": "SHIP-XYZ"
+        }
+      ],
+      "sentinel": {
+        "agent": "Sentinel",
+        "issue_detected": true,
+        "causal_chain": [
+          "Detected temperature spike (9.0C).",
+          "Cross-referenced RFID access logs: storage door accessed approximately 2 minutes earlier.",
+          "Verified compressor power draw is within normal operating range.",
+          "Conclusion: Human Error."
+        ],
+        "urgency": "CRITICAL",
+        "confidence_meter": 92
+      },
+      "audit": {
+        "agent": "AUDIT",
+        "shipment_id": "SHIP-XYZ",
+        "issue": "INVENTORY_SHRINKAGE",
+        "missing_items": [
+          {
+            "item_id": "item_101",
+            "missing_quantity": 2
+          }
+        ],
+        "inventory_gap": 2,
+        "priority": "HIGH",
+        "confidence_meter": 88
+      },
+      "arbiter": {
+        "agent": "ARBITER",
+        "conflicts_detected": [
+          "ROUTE_VS_INVENTORY"
+        ],
+        "final_decision": "BLOCK_REROUTE",
+        "actions": [
+          "PRIORITIZE_INVENTORY_RECOUNT"
+        ],
+        "blocked_actions": [
+          "REROUTE due to inventory shortage"
+        ],
+        "resolution_reasoning": "Rerouting would worsen inventory shortage, so inventory reconciliation is prioritized.",
+        "incident_summary": {
+          "threat_level": "HIGH",
+          "action_taken": "BLOCK_REROUTE",
+          "logic_applied": "Rerouting would worsen inventory shortage, so inventory reconciliation is prioritized.",
+          "potential_loss_prevented": "Prevented $5,000 in cold-chain spoilage"
+        },
+        "escalate_to_human": true,
+        "confidence_meter": 90
+      },
+      "conflict_alert": {
+        "is_active": true,
+        "conflict_type": "ROUTE_VS_INVENTORY",
+        "blocked_action": "REROUTE",
+        "severity": "HIGH",
+        "message": "Arbiter blocked reroute due to inventory shortfall risk.",
+        "timestamp": "2026-04-24T12:16:05Z"
+      }
+    }
+  ]
+}
