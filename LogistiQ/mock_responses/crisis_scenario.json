@@ -1,0 +1,169 @@
+{
+  "_meta": {
+    "description": "Pre-baked agent responses for DEMO_MODE=true. Use these when live LLM calls are slow or unavailable.",
+    "scenario": "TRUCK_07 deviation + WH_B RFID mismatch + COLD_03 temperature breach"
+  },
+  "SCOUT": {
+    "event_id": "evt_demo01",
+    "timestamp": "2024-01-15T14:32:07Z",
+    "anomalies": [
+      {
+        "anomaly_type": "GPS_DEVIATION",
+        "severity": 4,
+        "confidence": 0.91,
+        "affected_asset": "TRUCK_07",
+        "key_facts": [
+          "Vehicle is 4.2 km outside the 2 km route corridor",
+          "Driver has 47 minutes of legal drive time remaining",
+          "Truck carries restocking inventory for WH_B"
+        ],
+        "recommended_agents": [
+          "ROUTER"
+        ]
+      },
+      {
+        "anomaly_type": "RFID_MISMATCH",
+        "severity": 3,
+        "confidence": 0.87,
+        "affected_asset": "WH_B",
+        "key_facts": [
+          "65-unit gap: 847 scanned vs 912 expected",
+          "Gap represents 7.1% of manifest — above 5% threshold",
+          "TRUCK_07 is the scheduled restock vehicle for WH_B"
+        ],
+        "recommended_agents": [
+          "AUDIT"
+        ]
+      },
+      {
+        "anomaly_type": "IOT_ANOMALY",
+        "severity": 5,
+        "confidence": 0.94,
+        "affected_asset": "COLD_03",
+        "key_facts": [
+          "Temperature 12.4°C breaches SLA ceiling of 8°C",
+          "RFID access event #4471 recorded 3 minutes before spike",
+          "Adjacent units COLD_02 and COLD_04 reading normal (6.1°C / 6.4°C)",
+          "Vibration within normal range — compressor functioning"
+        ],
+        "recommended_agents": [
+          "SENTINEL"
+        ]
+      }
+    ],
+    "overall_assessment": "Three simultaneous anomalies detected: vehicle deviation on active restock route, significant inventory gap at destination warehouse, and cold storage breach with access-event correlation suggesting door left open."
+  },
+  "ROUTER": {
+    "event_id": "evt_demo01",
+    "proposed_action": "REROUTE_NORTH",
+    "route_description": "Take NH44 north toward Yelahanka, then divert via Bellary Road to reach WH_B via the northern gate. Avoids the current congestion on Outer Ring Road.",
+    "eta_delta_minutes": 14,
+    "driver_hours_remaining": 47,
+    "driver_hours_after_reroute": -2,
+    "driver_hours_violated": true,
+    "priority_score": 8,
+    "downstream_inventory_impact": "14-minute delay worsens WH_B shortage; however northern route is only viable path."
+  },
+  "AUDIT": {
+    "event_id": "evt_demo01",
+    "gap_quantity": 65,
+    "gap_value_estimate": "₹1,82,000",
+    "recount_priority": "HIGH",
+    "will_reroute_worsen_shortage": true,
+    "shortage_context": "WH_B is operating at 92.9% of expected stock. TRUCK_07 reroute delays restock by 14+ minutes during peak dispatch window.",
+    "recommended_action": "Expedite TRUCK_07 restock; initiate manual recount at WH_B Gate 2."
+  },
+  "SENTINEL": {
+    "event_id": "evt_demo01",
+    "symptom": "Temperature spike from 6.2°C to 12.4°C over 8 minutes",
+    "probable_cause": "DOOR_LEFT_OPEN",
+    "confidence": 0.94,
+    "causal_chain": [
+      "Step 1: RFID access event #4471 recorded at COLD_03 entry at 14:28 UTC.",
+      "Step 2: Temperature begins rising at 14:29 UTC — 1 minute after access.",
+      "Step 3: Adjacent units COLD_02 (6.1°C) and COLD_04 (6.4°C) show no change — rules out environmental or power issue.",
+      "Step 4: Vibration sensor reading 0.04g — within normal range — rules out compressor fault.",
+      "Step 5: Humidity rising to 88.3% consistent with open door, not mechanical failure.",
+      "Conclusion: Access event opened door; door was not closed; ambient air has warmed the unit."
+    ],
+    "recommended_action": "Dispatch personnel to close COLD_03 door immediately. Assess pharmaceutical stock for temperature exposure duration. Log incident for compliance report.",
+    "urgency": "CRITICAL",
+    "estimated_goods_at_risk": "₹4,20,000 in pharmaceutical inventory"
+  },
+  "ARBITER": {
+    "event_id": "evt_demo01",
+    "conflicts_detected": [
+      {
+        "conflict_type": "ROUTE_VS_INVENTORY",
+        "agents_involved": [
+          "ROUTER",
+          "AUDIT"
+        ],
+        "description": "Router proposes REROUTE_NORTH (+14 min) but Audit confirms this worsens the 65-unit WH_B shortage during peak dispatch window."
+      },
+      {
+        "conflict_type": "DRIVER_HOURS_VIOLATION",
+        "agents_involved": [
+          "ROUTER"
+        ],
+        "description": "Proposed reroute would leave driver 2 minutes over legal hours limit. Non-negotiable regulatory block applied."
+      }
+    ],
+    "final_actions": [
+      {
+        "action": "INITIATE_DRIVER_SWAP",
+        "asset": "TRUCK_07",
+        "rationale": "Replace current driver before executing any reroute."
+      },
+      {
+        "action": "CLOSE_COLD_STORE_DOOR",
+        "asset": "COLD_03",
+        "rationale": "Sentinel causal diagnosis is 94% confident — door left open."
+      },
+      {
+        "action": "DISPATCH_RECOUNT_TEAM",
+        "asset": "WH_B",
+        "rationale": "65-unit gap requires physical verification before next dispatch."
+      }
+    ],
+    "blocked_actions": [
+      {
+        "action": "REROUTE_NORTH",
+        "reason": "DRIVER_HOURS_VIOLATION",
+        "rule_violated": "Commercial vehicle driver max 9 hours per shift"
+      }
+    ],
+    "escalate_to_human": true,
+    "escalation_reason": "Driver swap requires human dispatch coordinator approval. Cold store pharmaceutical assessment requires on-site manager sign-off.",
+    "confidence_overall": 0.87,
+    "resolution_reasoning": "Two conflicts detected and resolved. REROUTE_NORTH blocked unconditionally due to driver hours — this is a legal constraint, not a judgement call. ROUTE_VS_INVENTORY conflict resolved by treating driver swap as prerequisite; restock route can be assigned to a fresh driver immediately. Cold store action is independent and proceeds with high confidence. Human escalation required for driver coordination and pharmaceutical sign-off."
+  },
+  "COMMANDER": {
+    "event_id": "evt_demo01",
+    "executive_summary": "Three simultaneous supply chain incidents detected and resolved in under 10 seconds. A delivery truck was diverted and its driver replaced before a legal hours violation occurred. A cold storage door was found open — pharmaceutical stock is at risk and a manager has been alerted. A warehouse inventory gap has triggered a recount. Two actions required human approval; all others executed autonomously.",
+    "incidents_resolved": 3,
+    "actions_taken": [
+      "Driver swap initiated for TRUCK_07 — replacement driver dispatched.",
+      "Cold store COLD_03 flagged for immediate door closure.",
+      "Recount team dispatched to WH_B Gate 2."
+    ],
+    "actions_blocked": [
+      "Northern reroute blocked — would have put driver 2 minutes over legal limit."
+    ],
+    "requires_human_attention": true,
+    "human_attention_reason": "Driver swap coordination and pharmaceutical stock assessment require manager approval within the next 5 minutes to prevent SLA breach.",
+    "confidence_overall": 0.87,
+    "estimated_cost_impact": "Prevented estimated ₹6,02,000 in combined spoilage, regulatory fines, and missed delivery penalties.",
+    "incident_report": {
+      "title": "Triple Simultaneous Anomaly — Route / Inventory / Cold Chain",
+      "timestamp": "2024-01-15T14:32:07Z",
+      "duration_seconds": 8,
+      "root_causes": [
+        "TRUCK_07 navigated around an unreported road closure without dispatcher notice.",
+        "WH_B RFID gap caused by loading error at origin facility.",
+        "COLD_03 door left open after access event #4471 — staff did not re-latch."
+      ],
+      "resolution": "Driver swap ordered. Cold store door closure dispatched. Recount team en route to WH_B. Human escalation raised for pharmaceutical assessment."
+    }
+  }
+}
