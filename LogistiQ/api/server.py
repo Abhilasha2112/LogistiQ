@@ -1,3 +1,7 @@
+"""
+LogistiQ API Server — FIX: subscribes to ALL agent channels including
+arbiter_output, sentinel_output, audit_output, commander_output, dashboard.
+"""
 import asyncio
 import json
 import os
@@ -9,106 +13,138 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 try:
-	from dotenv import load_dotenv
-	load_dotenv()
+    from dotenv import load_dotenv
+    load_dotenv()
 except Exception:
-	pass
+    pass
 
-
-APP_ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT       = Path(__file__).resolve().parents[1]
 DASHBOARD_FILE = APP_ROOT / "dashboard" / "index.html"
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CHANNELS = ["logistiq:raw_data", "logistiq:alerts", "logistiq:router_output"]
+REDIS_URL      = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-app = FastAPI(title="LogistiQ API", version="1.0.0")
+# Subscribe to every channel so the dashboard sees the full pipeline
+CHANNELS = [
+    "logistiq:raw_data",
+    "logistiq:alerts",
+    "logistiq:router_output",
+    "logistiq:audit_output",
+    "logistiq:sentinel_output",
+    "logistiq:arbiter_output",
+    "logistiq:commander_output",
+    "logistiq:dashboard",
+]
+
+app = FastAPI(title="LogistiQ API", version="2.0.0")
 
 _latest_events: List[Dict[str, Any]] = []
 _latest_lock = asyncio.Lock()
 
 
-def _decode_message(payload: Any) -> Any:
-	if isinstance(payload, (bytes, bytearray)):
-		try:
-			return payload.decode("utf-8")
-		except Exception:
-			return payload.decode(errors="replace")
-	return payload
+def _decode(payload: Any) -> Any:
+    if isinstance(payload, (bytes, bytearray)):
+        try:
+            return payload.decode("utf-8")
+        except Exception:
+            return payload.decode(errors="replace")
+    return payload
 
 
-async def _store_event(channel: str, data: Any) -> None:
-	message = {"channel": channel, "data": data}
-	async with _latest_lock:
-		_latest_events.append(message)
-		if len(_latest_events) > 100:
-			del _latest_events[:-100]
+async def _store(channel: str, data: Any) -> None:
+    # Try to parse nested JSON strings so the dashboard can render them nicely
+    parsed_data = data
+    if isinstance(data, str):
+        try:
+            parsed_data = json.loads(data)
+        except Exception:
+            parsed_data = data
+
+    message = {"channel": channel, "data": parsed_data}
+    async with _latest_lock:
+        _latest_events.append(message)
+        if len(_latest_events) > 200:
+            del _latest_events[:-200]
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
-	app.state.redis = redis.from_url(REDIS_URL, decode_responses=True)
-	app.state.redis_task = asyncio.create_task(_redis_fanout_loop())
+    app.state.redis = redis.from_url(REDIS_URL, decode_responses=True)
+    app.state.redis_task = asyncio.create_task(_fanout_loop())
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
-	task = getattr(app.state, "redis_task", None)
-	if task:
-		task.cancel()
-		try:
-			await task
-		except asyncio.CancelledError:
-			pass
-	client = getattr(app.state, "redis", None)
-	if client:
-		await client.aclose()
+    task = getattr(app.state, "redis_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    client = getattr(app.state, "redis", None)
+    if client:
+        await client.aclose()
 
 
-async def _redis_fanout_loop() -> None:
-	client = app.state.redis
-	pubsub = client.pubsub()
-	await pubsub.subscribe(*CHANNELS)
-	try:
-		while True:
-			message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-			if not message:
-				await asyncio.sleep(0.05)
-				continue
-			channel = _decode_message(message.get("channel", "unknown"))
-			data = _decode_message(message.get("data"))
-			await _store_event(channel, data)
-	finally:
-		await pubsub.unsubscribe(*CHANNELS)
-		await pubsub.close()
+async def _fanout_loop() -> None:
+    client = app.state.redis
+    pubsub = client.pubsub()
+    await pubsub.subscribe(*CHANNELS)
+    try:
+        while True:
+            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if not msg:
+                await asyncio.sleep(0.05)
+                continue
+            channel = _decode(msg.get("channel", "unknown"))
+            data    = _decode(msg.get("data"))
+            await _store(channel, data)
+    finally:
+        await pubsub.unsubscribe(*CHANNELS)
+        await pubsub.close()
 
 
 @app.get("/health")
 async def health() -> JSONResponse:
-	return JSONResponse({"status": "ok"})
+    return JSONResponse({"status": "ok", "channels": CHANNELS})
 
 
 @app.get("/snapshot")
 async def snapshot() -> JSONResponse:
-	async with _latest_lock:
-		return JSONResponse({"events": list(_latest_events)})
+    async with _latest_lock:
+        return JSONResponse({"events": list(_latest_events)})
 
 
 @app.get("/events")
 async def events() -> StreamingResponse:
-	async def event_stream() -> AsyncIterator[str]:
-		async with _latest_lock:
-			last_seen = len(_latest_events)
-		while True:
-			async with _latest_lock:
-				current_events = list(_latest_events)
-				new_events = current_events[last_seen:]
-				last_seen = len(current_events)
-			for event in new_events:
-				yield f"data: {json.dumps(event, ensure_ascii=True)}\n\n"
-			await asyncio.sleep(0.5)
+    async def stream() -> AsyncIterator[str]:
+        async with _latest_lock:
+            last_seen = len(_latest_events)
+        while True:
+            async with _latest_lock:
+                new = _latest_events[last_seen:]
+                last_seen = len(_latest_events)
+            for event in new:
+                yield f"data: {json.dumps(event, ensure_ascii=True)}\n\n"
+            await asyncio.sleep(0.3)
 
-	return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 @app.get("/")
 async def dashboard() -> FileResponse:
-	return FileResponse(DASHBOARD_FILE)
+    return FileResponse(DASHBOARD_FILE)
+
+
+import subprocess
+import sys
+
+@app.post("/trigger-crisis")
+async def trigger_crisis() -> JSONResponse:
+    """Called by the dashboard's Simulate Crisis button."""
+    simulator = APP_ROOT / "simulator" / "data_generator.py"
+    subprocess.Popen(
+        [sys.executable, str(simulator), "--crisis"],
+        cwd=str(APP_ROOT),
+        env=os.environ.copy(),
+    )
+    return JSONResponse({"status": "crisis triggered"})
