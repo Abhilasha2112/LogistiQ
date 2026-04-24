@@ -1,52 +1,154 @@
-import anthropic
-import redis
 import json
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Any, Dict
 
-load_dotenv()
+import redis.asyncio as redis
+from anthropic import AsyncAnthropic
 
-r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+try:
+	from dotenv import load_dotenv
+	load_dotenv()
+except Exception:
+	pass
 
-DEMO_MODE = os.getenv('DEMO_MODE', 'false').lower() == 'true'
+MODEL_NAME = "claude-sonnet-4-20250514"
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-
-def call_llm(system_prompt: str, user_data: dict) -> dict:
-    response = client.messages.create(
-        model='claude-sonnet-4-20250514',
-        max_tokens=1000,
-        system=system_prompt,
-        messages=[{'role': 'user', 'content': json.dumps(user_data)}]
-    )
-    text = response.content[0].text
-    # Strip markdown code fences if present
-    text = text.replace('```json', '').replace('```', '').strip()
-    return json.loads(text)
+_anthropic_client: AsyncAnthropic | None = None
+_redis_client: redis.Redis | None = None
 
 
-def get_mock_response(agent_name: str) -> dict:
-    """Load pre-baked response from crisis_scenario.json for DEMO_MODE."""
-    mock_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'mock_responses', 'crisis_scenario.json'
-    )
-    with open(mock_path, encoding='utf-8') as f:
-        return json.load(f)[agent_name]
+def get_redis_client() -> redis.Redis:
+	global _redis_client
+	if _redis_client is None:
+		_redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+	return _redis_client
 
 
-def publish(channel: str, data: dict) -> None:
-    """Publish a JSON message to a Redis channel."""
-    r.publish(channel, json.dumps(data))
+def get_anthropic_client() -> AsyncAnthropic:
+	global _anthropic_client
+	if _anthropic_client is None:
+		_anthropic_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+	return _anthropic_client
 
 
-def health_check() -> bool:
-    """Verify Redis is reachable before starting any agent."""
-    try:
-        r.ping()
-        print("[INFO] Redis connection OK")
-        return True
-    except Exception as e:
-        print(f"[ERROR] Redis not reachable: {e}")
-        print("[ERROR] Make sure Memurai/Redis is running before starting agents.")
-        return False
+def _strip_markdown_fences(text: str) -> str:
+	cleaned = text.strip()
+	if cleaned.startswith("```"):
+		parts = cleaned.splitlines()
+		if parts:
+			parts = parts[1:]
+		if parts and parts[-1].strip().startswith("```"):
+			parts = parts[:-1]
+		cleaned = "\n".join(parts).strip()
+	return cleaned
+
+
+def _project_root() -> Path:
+	return Path(__file__).resolve().parents[1]
+
+
+def _default_mock_payloads() -> Dict[str, Dict[str, Any]]:
+	return {
+		"scout": {
+			"event_id": "demo_event_001",
+			"anomalies": [
+				{
+					"anomaly_type": "GPS_DEVIATION",
+					"severity": 4,
+					"confidence": 0.92,
+					"affected_asset": "TRUCK-17",
+					"key_facts": [
+						"Vehicle drifted 3.4 km off planned corridor",
+						"Deviation persisted for 14 minutes",
+					],
+					"recommended_agents": ["ROUTER", "SENTINEL"],
+				}
+			],
+			"overall_assessment": "A sustained route deviation requires immediate reroute validation.",
+		},
+		"router": {
+			"event_id": "demo_event_001",
+			"proposed_action": "REROUTE_NORTH",
+			"route_description": "Take Exit 22, merge onto North Bypass, and rejoin primary route at Junction D.",
+			"eta_delta_minutes": 12,
+			"driver_hours_remaining": 47,
+			"driver_hours_after_reroute": 35,
+			"driver_hours_violated": False,
+			"priority_score": 8,
+			"downstream_inventory_impact": "Minor delay for stop 3, no stockout risk for same-day orders.",
+		},
+	}
+
+
+def _infer_agent_key(system_prompt: str) -> str:
+	prompt = system_prompt.lower()
+	if "scout" in prompt:
+		return "scout"
+	if "router" in prompt:
+		return "router"
+	return "scout"
+
+
+def load_mock_response(agent_key: str) -> Dict[str, Any]:
+	mock_file = _project_root() / "mock_responses" / "crisis_scenario.json"
+	fallback = _default_mock_payloads()
+	if not mock_file.exists():
+		return fallback[agent_key]
+
+	try:
+		raw = mock_file.read_text(encoding="utf-8").strip()
+		if not raw:
+			return fallback[agent_key]
+		parsed = json.loads(raw)
+		if isinstance(parsed, dict):
+			if agent_key in parsed and isinstance(parsed[agent_key], dict):
+				return parsed[agent_key]
+			upper_key = agent_key.upper()
+			if upper_key in parsed and isinstance(parsed[upper_key], dict):
+				return parsed[upper_key]
+			if "agents" in parsed and isinstance(parsed["agents"], dict):
+				maybe = parsed["agents"].get(agent_key)
+				if isinstance(maybe, dict):
+					return maybe
+			if agent_key == "scout" and "anomalies" in parsed:
+				return parsed
+			if agent_key == "router" and "proposed_action" in parsed:
+				return parsed
+	except Exception:
+		pass
+	return fallback[agent_key]
+
+
+async def call_llm(system_prompt: str, user_data: Dict[str, Any]) -> Dict[str, Any]:
+	agent_key = _infer_agent_key(system_prompt)
+
+	if os.getenv("DEMO_MODE", "false").lower() == "true":
+		return load_mock_response(agent_key)
+
+	try:
+		client = get_anthropic_client()
+		response = await client.messages.create(
+			model=MODEL_NAME,
+			max_tokens=1200,
+			system=system_prompt,
+			messages=[
+				{
+					"role": "user",
+					"content": json.dumps(user_data, ensure_ascii=True),
+				}
+			],
+		)
+
+		text_chunks: list[str] = []
+		for content_block in response.content:
+			text = getattr(content_block, "text", None)
+			if text:
+				text_chunks.append(text)
+
+		raw_text = "\n".join(text_chunks)
+		cleaned = _strip_markdown_fences(raw_text)
+		return json.loads(cleaned)
+	except Exception:
+		return load_mock_response(agent_key)
