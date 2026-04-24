@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>LogistiQ Control Panel</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #0b1020;
+				--panel: rgba(17, 24, 39, 0.88);
+				--panel-2: rgba(30, 41, 59, 0.75);
+				--border: rgba(148, 163, 184, 0.2);
+				--text: #e5eefb;
+				--muted: #9fb1cc;
+				--accent: #6ee7ff;
+				--good: #34d399;
+				--warn: #fbbf24;
+				--bad: #f87171;
+			}
+
+			* { box-sizing: border-box; }
+			body {
+				margin: 0;
+				font-family: Inter, Segoe UI, Arial, sans-serif;
+				background:
+					radial-gradient(circle at top left, rgba(110, 231, 255, 0.16), transparent 32%),
+					radial-gradient(circle at bottom right, rgba(52, 211, 153, 0.12), transparent 28%),
+					var(--bg);
+				color: var(--text);
+				min-height: 100vh;
+			}
+
+			header {
+				padding: 28px 32px 16px;
+				display: flex;
+				justify-content: space-between;
+				align-items: end;
+				gap: 20px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: 32px;
+				letter-spacing: 0.3px;
+			}
+
+			.subtitle { color: var(--muted); margin-top: 8px; }
+
+			.status {
+				padding: 10px 14px;
+				border-radius: 999px;
+				border: 1px solid var(--border);
+				background: rgba(15, 23, 42, 0.6);
+				color: var(--accent);
+				font-size: 13px;
+			}
+
+			main {
+				padding: 0 32px 32px;
+				display: grid;
+				gap: 18px;
+				grid-template-columns: 1.2fr 0.8fr;
+			}
+
+			.card {
+				background: var(--panel);
+				border: 1px solid var(--border);
+				border-radius: 18px;
+				box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+				overflow: hidden;
+			}
+
+			.card header {
+				padding: 16px 18px;
+				border-bottom: 1px solid var(--border);
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+
+			.card h2 {
+				margin: 0;
+				font-size: 16px;
+				letter-spacing: 0.4px;
+			}
+
+			.card .body { padding: 16px 18px 18px; }
+
+			.timeline {
+				display: grid;
+				gap: 12px;
+			}
+
+			.event {
+				background: var(--panel-2);
+				border: 1px solid var(--border);
+				border-radius: 14px;
+				padding: 14px;
+			}
+
+			.event-top {
+				display: flex;
+				justify-content: space-between;
+				gap: 12px;
+				align-items: center;
+				margin-bottom: 8px;
+			}
+
+			.channel {
+				font-size: 12px;
+				color: var(--accent);
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+			}
+
+			.time { color: var(--muted); font-size: 12px; }
+			pre {
+				margin: 0;
+				white-space: pre-wrap;
+				word-break: break-word;
+				font-size: 13px;
+				line-height: 1.45;
+				color: #dbeafe;
+			}
+
+			.metrics {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 12px;
+			}
+
+			.metric {
+				background: var(--panel-2);
+				border: 1px solid var(--border);
+				border-radius: 14px;
+				padding: 14px;
+			}
+
+			.metric .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+			.metric .value { font-size: 26px; margin-top: 8px; }
+
+			.legend {
+				display: flex;
+				gap: 10px;
+				flex-wrap: wrap;
+				margin-top: 12px;
+			}
+
+			.pill {
+				border: 1px solid var(--border);
+				border-radius: 999px;
+				padding: 6px 10px;
+				font-size: 12px;
+				color: var(--muted);
+			}
+
+			.good { color: var(--good); }
+			.warn { color: var(--warn); }
+			.bad { color: var(--bad); }
+
+			@media (max-width: 980px) {
+				main { grid-template-columns: 1fr; }
+				header { align-items: start; flex-direction: column; }
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<div>
+				<h1>LogistiQ Control Panel</h1>
+				<div class="subtitle">Live Redis event stream for raw telemetry, anomaly alerts, and reroute decisions.</div>
+			</div>
+			<div class="status" id="connectionStatus">Connecting…</div>
+		</header>
+
+		<main>
+			<section class="card">
+				<header>
+					<h2>Event Stream</h2>
+					<span class="pill" id="eventCount">0 events</span>
+				</header>
+				<div class="body">
+					<div class="timeline" id="timeline"></div>
+				</div>
+			</section>
+
+			<section class="card">
+				<header>
+					<h2>Pipeline Health</h2>
+					<span class="pill">Scout → Router</span>
+				</header>
+				<div class="body">
+					<div class="metrics">
+						<div class="metric">
+							<div class="label">Latest Channel</div>
+							<div class="value" id="latestChannel">—</div>
+						</div>
+						<div class="metric">
+							<div class="label">Latest Event ID</div>
+							<div class="value" id="latestEventId">—</div>
+						</div>
+						<div class="metric">
+							<div class="label">Scout Alerts</div>
+							<div class="value good" id="scoutAlerts">0</div>
+						</div>
+						<div class="metric">
+							<div class="label">Router Outputs</div>
+							<div class="value warn" id="routerOutputs">0</div>
+						</div>
+					</div>
+
+					<div class="legend">
+						<span class="pill">logistiq:raw_data</span>
+						<span class="pill">logistiq:alerts</span>
+						<span class="pill">logistiq:router_output</span>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<script>
+			const timeline = document.getElementById("timeline");
+			const connectionStatus = document.getElementById("connectionStatus");
+			const eventCount = document.getElementById("eventCount");
+			const latestChannel = document.getElementById("latestChannel");
+			const latestEventId = document.getElementById("latestEventId");
+			const scoutAlerts = document.getElementById("scoutAlerts");
+			const routerOutputs = document.getElementById("routerOutputs");
+
+			let totalEvents = 0;
+			let scoutCount = 0;
+			let routerCount = 0;
+
+			function renderEvent(event) {
+				totalEvents += 1;
+				eventCount.textContent = `${totalEvents} events`;
+				latestChannel.textContent = event.channel || "unknown";
+
+				const payload = typeof event.data === "string" ? safeParse(event.data) : event.data;
+				latestEventId.textContent = payload && payload.event_id ? payload.event_id : "—";
+
+				if (event.channel === "logistiq:alerts") scoutCount += 1;
+				if (event.channel === "logistiq:router_output") routerCount += 1;
+				scoutAlerts.textContent = scoutCount;
+				routerOutputs.textContent = routerCount;
+
+				const node = document.createElement("article");
+				node.className = "event";
+				node.innerHTML = `
+					<div class="event-top">
+						<div class="channel">${escapeHtml(event.channel || "unknown")}</div>
+						<div class="time">${new Date().toLocaleTimeString()}</div>
+					</div>
+					<pre>${escapeHtml(JSON.stringify(payload ?? event.data, null, 2))}</pre>
+				`;
+				timeline.prepend(node);
+			}
+
+			function safeParse(value) {
+				try { return JSON.parse(value); } catch { return value; }
+			}
+
+			function escapeHtml(value) {
+				return String(value)
+					.replaceAll("&", "&amp;")
+					.replaceAll("<", "&lt;")
+					.replaceAll(">", "&gt;")
+					.replaceAll('"', "&quot;")
+					.replaceAll("'", "&#039;");
+			}
+
+			async function loadSnapshot() {
+				const response = await fetch("/snapshot");
+				const data = await response.json();
+				(data.events || []).forEach(renderEvent);
+			}
+
+			async function connect() {
+				try {
+					await loadSnapshot();
+					const source = new EventSource("/events");
+					source.onopen = () => {
+						connectionStatus.textContent = "Connected";
+					};
+					source.onmessage = (message) => {
+						renderEvent(JSON.parse(message.data));
+					};
+					source.onerror = () => {
+						connectionStatus.textContent = "Reconnecting…";
+					};
+				} catch (error) {
+					connectionStatus.textContent = "Offline";
+					console.error(error);
+				}
+			}
+
+			connect();
+		</script>
+	</body>
+</html>

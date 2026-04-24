@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run LogistiQ stack",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "run_all.py",
+        "--count",
+        "1",
+        "--interval",
+        "2"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/LogistiQ"
+      },
+      "isBackground": false,
+      "group": "build"
+    }
+  ]
+}
